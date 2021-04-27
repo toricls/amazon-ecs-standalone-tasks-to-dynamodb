@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ecs-standalone-tasks-to-ddb
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 5
+
+Resources:
+  EcsTaskEventProcessor:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: ecs-standalone-tasks-to-ddb
+      Runtime: go1.x
+      Events:
+        EventBridgeRule:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+              - "aws.ecs"
+              detailType:
+              - "ECS Task State Change"
+              detail:
+                group:
+                - anything-but:
+                    prefix: "service:"
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref DynamoDBRunningTasksTable
+      Environment:
+        Variables:
+          DDB_RUNNING_TASKS_TABLE: !Ref DynamoDBRunningTasksTable
+
+  DynamoDBRunningTasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - AttributeName: Arn
+          AttributeType: S
+      KeySchema: 
+        - AttributeName: Arn
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+Outputs:
+  EcsTaskEventProcessor:
+    Description: "EcsTaskEventProcessor Function ARN"
+    Value: !GetAtt EcsTaskEventProcessor.Arn
